@@ -131,6 +131,11 @@ export default function SignUpForm() {
         return
       }
 
+      // Sign out immediately — Supabase may create an active session even before
+      // email confirmation. We don't want GuestRoute to redirect the user away
+      // from /verify before they complete OTP verification.
+      await supabase.auth.signOut()
+
       // Send OTP via EmailJS
       const otpResult = await sendOtp(form.email.trim())
       if (!otpResult.success) {
@@ -138,7 +143,7 @@ export default function SignUpForm() {
         return
       }
 
-      navigate('/verify', { state: { email: form.email.trim() } })
+      navigate('/verify', { state: { email: form.email.trim(), fullName: form.fullName.trim() } })
     } catch {
       setGlobalError('An unexpected error occurred. Please try again.')
     } finally {

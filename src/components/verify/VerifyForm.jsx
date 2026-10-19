@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { sendOtp, verifyOtp, readOtpRecord, OTP_TTL_MS, RESEND_COOLDOWN_MS } from '../../lib/otp'
 
@@ -55,7 +55,15 @@ function fmt(secs) {
 export default function VerifyForm() {
   const navigate = useNavigate()
   const { state } = useLocation()
-  const email = state?.email || ''
+
+  // Persist email to sessionStorage so it survives a hard refresh / back navigation
+  const email = useMemo(() => {
+    if (state?.email) {
+      sessionStorage.setItem('ms_verify_email', state.email)
+      return state.email
+    }
+    return sessionStorage.getItem('ms_verify_email') || ''
+  }, [state])
 
   const [digits, setDigits] = useState(Array(DIGITS).fill(''))
   const [error, setError] = useState('')
@@ -90,13 +98,14 @@ export default function VerifyForm() {
     return () => clearInterval(id)
   }, [])
 
-  // If no OTP was issued and no email provided, redirect to signin
+  // If no OTP was issued and no email is recoverable, redirect to signin
   useEffect(() => {
     const rec = readOtpRecord()
-    if (!rec && !email && !success) {
+    const storedEmail = sessionStorage.getItem('ms_verify_email')
+    if (!rec && !storedEmail && !success) {
       navigate('/signin', { replace: true })
     }
-  }, [email, success, navigate])
+  }, [success, navigate])
 
   // Focus first box on mount
   useEffect(() => {
@@ -154,6 +163,7 @@ export default function VerifyForm() {
     try {
       const result = verifyOtp(code)
       if (result.valid) {
+        sessionStorage.removeItem('ms_verify_email')
         setSuccess(true)
         setTimeout(() => navigate('/signin', { state: { verified: true, email }, replace: true }), 1200)
       } else if (result.expired) {
